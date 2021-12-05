@@ -4,7 +4,8 @@ Requires PHP 7.2
 Usage
 -----
 Autoload the trait as it's described in the https://github.com/phalcon/incubator#autoloading-from-the-incubator
-The usage is similar to Laravel, I've implemented in a trait `with` and `load` methods, so within a model that uses that trait (`\Phalcon\Mvc\Model\EagerLoadingTrait`) you can do:
+
+The usage is similar to Laravel. Implemented in a trait `with` and `load` methods, so within a model that uses that trait (`\Phalcon\Mvc\Model\EagerLoadingTrait`) you can do:
 
 ```php
 <?php
