@@ -3,13 +3,13 @@ Requires PHP 7.2
 
 Usage
 -----
-
-The usage is similar to Laravel, I've implemented in a trait `with` and `load` methods, so within a model that uses that trait (`Sb\Framework\Mvc\Model\EagerLoadingTrait`) you can do:
+Autoload the trait as it's described in the https://github.com/phalcon/incubator#autoloading-from-the-incubator
+The usage is similar to Laravel, I've implemented in a trait `with` and `load` methods, so within a model that uses that trait (`\Phalcon\Mvc\Model\EagerLoadingTrait`) you can do:
 
 ```php
 <?php
-use Sb\Framework\Mvc\Model\EagerLoading\Loader,
-	Sb\Framework\Mvc\Model\EagerLoading\QueryBuilder;
+use \Phalcon\Mvc\Model\EagerLoading\Loader,
+	\Phalcon\Mvc\Model\EagerLoading\QueryBuilder;
 
 $robotsAndParts = Robot::with('Parts');
 
