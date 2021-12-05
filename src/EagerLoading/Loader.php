@@ -1,342 +1,404 @@
-<?php namespace Sb\Framework\Mvc\Model\EagerLoading;
+<?php namespace Phalcon\Mvc\Model\EagerLoading;
 
-use Phalcon\Mvc\ModelInterface,
-	Phalcon\Mvc\Model\Relation,
-	Phalcon\Mvc\Model\Resultset\Simple;
+use Phalcon\Di;
+use Phalcon\Mvc\ModelInterface;
+use Phalcon\Mvc\Model\Relation;
+use Phalcon\Mvc\Model\Resultset\Simple;
 
-final class Loader {
-	const E_INVALID_SUBJECT = 'Expected value of `subject` is either a ModelInterface object, a Simple object or an array of ModelInterface objects';
+final class Loader
+{
+    const E_INVALID_SUBJECT = <<<'MSG'
+Expected value of `subject` is either a ModelInterface object, a Simple object or an array of ModelInterface objects
+MSG;
 
-	/** @var ModelInterface[] */
-	protected $subject;
-	/** @var string */
-	protected $subjectClassName;
-	/** @var array */
-	protected $eagerLoads;
-	/** @var boolean */
-	protected $mustReturnAModel;
+    /** @var ModelInterface[] */
+    protected $subject;
+    /** @var string */
+    protected $subjectClassName;
+    /** @var array */
+    protected $eagerLoads;
+    /** @var boolean */
+    protected $mustReturnAModel;
 
-	/**
-	 * @param ModelInterface|ModelInterface[]|Simple $from
-	 * @param array $arguments
-	 * @throws \InvalidArgumentException
-	 */
-	public function __construct($from, ...$arguments) {
-		$error     = FALSE;
-		$className = NULL;
+    /**
+     * @param ModelInterface|ModelInterface[]|Simple $from
+     * @param ...$arguments
+     * @throws \InvalidArgumentException
+     */
+    public function __construct($from)
+    {
+        $error     = false;
+        $className = null;
+        $arguments = array_slice(func_get_args(), 1);
 
-		if (! $from instanceof ModelInterface) {
-			if (! $from instanceof Simple) {
-				if (($fromType = gettype($from)) !== 'array') {
-					if (NULL !== $from && $fromType !== 'boolean') {
-						$error = TRUE;
-					}
-					else {
-						$from = NULL;
-					}
-				}
-				else {
-					$from = array_filter($from);
+        if (!$from instanceof ModelInterface) {
+            if (!$from instanceof Simple) {
+                if (($fromType = gettype($from)) !== 'array') {
+                    if (null !== $from && $fromType !== 'boolean') {
+                        $error = true;
+                    } else {
+                        $from = null;
+                    }
+                } else {
+                    $from = array_filter($from);
 
-					if (empty ($from)) {
-						$from = NULL;
-					}
-					else {
-						foreach ($from as $el) {
-							if ($el instanceof ModelInterface) {
-								if ($className === NULL) {
-									$className = get_class($el);
-								}
-								else {
-									if ($className !== get_class($el)) {
-										$error = TRUE;
-										break;
-									}
-								}
-							}
-							else {
-								$error = TRUE;
-								break;
-							}
-						}
-					}
-				}
-			}
-			else {
-				$prev = $from;
-				$from = [];
+                    if (empty($from)) {
+                        $from = null;
+                    } else {
+                        foreach ($from as $el) {
+                            if ($el instanceof ModelInterface) {
+                                if ($className === null) {
+                                    $className = get_class($el);
+                                } else {
+                                    if ($className !== get_class($el)) {
+                                        $error = true;
 
-				foreach ($prev as $record) {
-					$from[] = $record;
-				}
+                                        break;
+                                    }
+                                }
+                            } else {
+                                $error = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            } else {
+                $prev = $from;
+                $from = [];
 
-				if (empty ($from)) {
-					$from = NULL;
-				}
-				else {
-					$className = get_class($record);
-				}
-			}
+                foreach ($prev as $record) {
+                    $from[] = $record;
+                }
 
-			$this->mustReturnAModel = FALSE;
-		}
-		else {
-			$className = get_class($from);
-			$from      = [$from];
+                if (empty($from)) {
+                    $from = null;
+                } else {
+                    $className = get_class($record);
+                }
+            }
 
-			$this->mustReturnAModel = TRUE;
-		}
+            $this->mustReturnAModel = false;
+        } else {
+            $className = get_class($from);
+            $from      = [$from];
 
-		if ($error) {
-			throw new \InvalidArgumentException(static::E_INVALID_SUBJECT);
-		}
+            $this->mustReturnAModel = true;
+        }
 
-		$this->subject          = $from;
-		$this->subjectClassName = $className;
-		$this->eagerLoads       = ($from === NULL || empty ($arguments)) ? [] : static::parseArguments($arguments);
-	}
+        if ($error) {
+            throw new \InvalidArgumentException(
+                static::E_INVALID_SUBJECT
+            );
+        }
 
-	/**
-	 * Create and get from a mixed $subject
-	 *
-	 * @param ModelInterface|ModelInterface[]|Simple $subject
-	 * @param mixed ...$arguments
-	 * @throws \InvalidArgumentException
-	 * @return mixed
-	 */
-	static public function from($subject, ...$arguments) {
-		if ($subject instanceof ModelInterface) {
-			$ret = static::fromModel($subject, ...$arguments);
-		}
-		else if ($subject instanceof Simple) {
-			$ret = static::fromResultset($subject, ...$arguments);
-		}
-		else if (is_array($subject)) {
-			$ret = static::fromArray($subject, ...$arguments);
-		}
-		else {
-			throw new \InvalidArgumentException(static::E_INVALID_SUBJECT);
-		}
+        $this->subject = $from;
+        $this->subjectClassName = $className;
+        $this->eagerLoads = ($from === null || empty($arguments)) ? [] : static::parseArguments($arguments);
+    }
 
-		return $ret;
-	}
+    /**
+     * Create and get from a mixed $subject
+     *
+     * @param ModelInterface|ModelInterface[]|Simple $subject
+     * @param mixed ...$arguments
+     * @throws \InvalidArgumentException
+     * @return mixed
+     */
+    public static function from($subject)
+    {
+        if ($subject instanceof ModelInterface) {
+            $ret = call_user_func_array(
+                'static::fromModel',
+                func_get_args()
+            );
+        } elseif ($subject instanceof Simple) {
+            $ret = call_user_func_array(
+                'static::fromResultset',
+                func_get_args()
+            );
+        } elseif (is_array($subject)) {
+            $ret = call_user_func_array(
+                'static::fromArray',
+                func_get_args()
+            );
+        } else {
+            throw new \InvalidArgumentException(
+                static::E_INVALID_SUBJECT
+            );
+        }
 
-	/**
-	 * Create and get from a Model
-	 *
-	 * @param ModelInterface $subject
-	 * @param mixed ...$arguments
-	 * @return ModelInterface
-	 */
-	static public function fromModel(ModelInterface $subject, ...$arguments) {
-		return (new static($subject, ...$arguments))->execute()->get();
-	}
+        return $ret;
+    }
 
-	/**
-	 * Create and get from an array
-	 *
-	 * @param ModelInterface[] $subject
-	 * @param mixed ...$arguments
-	 * @return array
-	 */
-	static public function fromArray(array $subject, ...$arguments) {
-		return (new static($subject, ...$arguments))->execute()->get();
-	}
+    /**
+     * Create and get from a Model
+     *
+     * @param ModelInterface $subject
+     * @param mixed ...$arguments
+     * @return ModelInterface
+     */
+    public static function fromModel(ModelInterface $subject)
+    {
+        $reflection = new \ReflectionClass(__CLASS__);
 
-	/**
-	 * Create and get from a Resultset
-	 *
-	 * @param Simple $subject
-	 * @param mixed ...$arguments
-	 * @return Simple
-	 */
-	static public function fromResultset(Simple $subject, ...$arguments) {
-		return (new static($subject, ...$arguments))->execute()->get();
-	}
+        $instance = $reflection->newInstanceArgs(
+            func_get_args()
+        );
 
-	/**
-	 * @return null|ModelInterface[]|ModelInterface
-	 */
-	public function get() {
-		$ret = $this->subject;
+        return $instance->execute()->get();
+    }
 
-		if (NULL !== $ret && $this->mustReturnAModel) {
-			$ret = $ret[0];
-		}
+    /**
+     * Create and get from an array
+     *
+     * @param ModelInterface[] $subject
+     * @param mixed ...$arguments
+     * @return array
+     */
+    public static function fromArray(array $subject)
+    {
+        $reflection = new \ReflectionClass(__CLASS__);
 
-		return $ret;
-	}
+        $instance = $reflection->newInstanceArgs(
+            func_get_args()
+        );
 
-	/**
-	 * @return null|ModelInterface[]
-	 */
-	public function getSubject() {
-		return $this->subject;
-	}
+        return $instance->execute()->get();
+    }
 
-	/**
-	 * Parses the arguments that will be resolved to Relation instances
-	 *
-	 * @param array $arguments
-	 * @throws \InvalidArgumentException
-	 * @return array
-	 */
-	static private function parseArguments(array $arguments) {
-		if (empty ($arguments)) {
-			throw new \InvalidArgumentException('Arguments can not be empty');
-		}
+    /**
+     * Create and get from a Resultset
+     *
+     * @param Simple $subject
+     * @param mixed ...$arguments
+     * @return Simple
+     */
+    public static function fromResultset(Simple $subject)
+    {
+        $reflection = new \ReflectionClass(__CLASS__);
 
-		$relations = [];
+        $instance = $reflection->newInstanceArgs(
+            func_get_args()
+        );
 
-		if (count($arguments) === 1 && isset ($arguments[0]) && is_array($arguments[0])) {
-			foreach ($arguments[0] as $relationAlias => $queryConstraints) {
-				if (is_string($relationAlias)) {
-					$relations[$relationAlias] = is_callable($queryConstraints) ? $queryConstraints : NULL;
-				}
-				else {
-					if (is_string($queryConstraints)) {
-						$relations[$queryConstraints] = NULL;
-					}
-				}
-			}
-		}
-		else {
-			foreach ($arguments as $relationAlias) {
-				if (is_string($relationAlias)) {
-					$relations[$relationAlias] = NULL;
-				}
-			}
-		}
+        return $instance->execute()->get();
+    }
 
-		if (empty ($relations)) {
-			throw new \InvalidArgumentException;
-		}
+    /**
+     * @return null|ModelInterface[]|ModelInterface
+     */
+    public function get()
+    {
+        $ret = $this->subject;
 
-		return $relations;
-	}
+        if (null !== $ret && $this->mustReturnAModel) {
+            $ret = $ret[0];
+        }
 
-	/**
-	 * @param string $relationAlias
-	 * @param null|callable $constraints
-	 * @return $this
-	 */
-	public function addEagerLoad($relationAlias, callable $constraints = NULL) {
-		if (! is_string($relationAlias)) {
-			throw new \InvalidArgumentException(sprintf(
-				'$relationAlias expects to be a string, `%s` given',
-				gettype($relationAlias)
-			));
-		}
+        return $ret;
+    }
 
-		$this->eagerLoads[$relationAlias] = $constraints;
+    /**
+     * @return null|ModelInterface[]
+     */
+    public function getSubject()
+    {
+        return $this->subject;
+    }
 
-		return $this;
-	}
+    /**
+     * Parses the arguments that will be resolved to Relation instances
+     *
+     * @param array $arguments
+     * @throws \InvalidArgumentException
+     * @return array
+     */
+    private static function parseArguments(array $arguments)
+    {
+        if (empty($arguments)) {
+            throw new \InvalidArgumentException('Arguments can not be empty');
+        }
 
-	/**
-	 * Resolves the relations
-	 *
-	 * @throws \RuntimeException
-	 * @return EagerLoad[]
-	 */
-	private function buildTree() {
-		uksort($this->eagerLoads, 'strcmp');
+        $relations = [];
 
-		$di = \Phalcon\DI::getDefault();
-		$mM = $di['modelsManager'];
+        if (count($arguments) === 1 && isset($arguments[0]) && is_array($arguments[0])) {
+            foreach ($arguments[0] as $relationAlias => $queryConstraints) {
+                if (is_string($relationAlias)) {
+                    $relations[$relationAlias] = is_callable($queryConstraints) ? $queryConstraints : null;
+                } else {
+                    if (is_string($queryConstraints)) {
+                        $relations[$queryConstraints] = null;
+                    }
+                }
+            }
+        } else {
+            foreach ($arguments as $relationAlias) {
+                if (is_string($relationAlias)) {
+                    $relations[$relationAlias] = null;
+                }
+            }
+        }
 
-		$eagerLoads = $resolvedRelations = [];
+        if (empty($relations)) {
+            throw new \InvalidArgumentException;
+        }
 
-		foreach ($this->eagerLoads as $relationAliases => $queryConstraints) {
-			$nestingLevel    = 0;
-			$relationAliases = explode('.', $relationAliases);
-			$nestingLevels   = count($relationAliases);
+        return $relations;
+    }
 
-			do {
-				do {
-					$alias = $relationAliases[$nestingLevel];
-					$name  = join('.', array_slice($relationAliases, 0, $nestingLevel + 1));
-				}
-				while (isset ($eagerLoads[$name]) && ++$nestingLevel);
+    /**
+     * @param string $relationAlias
+     * @param null|callable $constraints
+     * @return $this
+     */
+    public function addEagerLoad($relationAlias, $constraints = null)
+    {
+        if (!is_string($relationAlias)) {
+            throw new \InvalidArgumentException(
+                sprintf(
+                    '$relationAlias expects to be a string, `%s` given',
+                    gettype($relationAlias)
+                )
+            );
+        }
 
-				if ($nestingLevel === 0) {
-					$parentClassName = $this->subjectClassName;
-				}
-				else {
-					$parentName = join('.', array_slice($relationAliases, 0, $nestingLevel));
-					$parentClassName = $resolvedRelations[$parentName]->getReferencedModel();
+        if ($constraints !== null && !is_callable($constraints)) {
+            throw new \InvalidArgumentException(
+                sprintf(
+                    '$constraints expects to be a callable, `%s` given',
+                    gettype($constraints)
+                )
+            );
+        }
 
-					if ($parentClassName[0] === '\\') {
-						ltrim($parentClassName, '\\');
-					}
-				}
+        $this->eagerLoads[$relationAlias] = $constraints;
 
-				if (! isset ($resolvedRelations[$name])) {
-					$mM->load($parentClassName);
-					$relation = $mM->getRelationByAlias($parentClassName, $alias);
+        return $this;
+    }
 
-					if (! $relation instanceof Relation) {
-						throw new \RuntimeException(sprintf(
-							'There is no defined relation for the model `%s` using alias `%s`',
-							$parentClassName,
-							$alias
-						));
-					}
+    /**
+     * Resolves the relations
+     *
+     * @throws \RuntimeException
+     * @return EagerLoad[]
+     */
+    private function buildTree()
+    {
+        uksort($this->eagerLoads, 'strcmp');
 
-					$resolvedRelations[$name] = $relation;
-				}
-				else {
-					$relation = $resolvedRelations[$name];
-				}
+        $di = DI::getDefault();
+        $mM = $di['modelsManager'];
 
-				$relType = $relation->getType();
+        $eagerLoads = $resolvedRelations = [];
 
-				if ($relType !== Relation::BELONGS_TO &&
-					$relType !== Relation::HAS_ONE &&
-					$relType !== Relation::HAS_MANY &&
-					$relType !== Relation::HAS_MANY_THROUGH) {
+        foreach ($this->eagerLoads as $relationAliases => $queryConstraints) {
+            $nestingLevel    = 0;
+            $relationAliases = explode('.', $relationAliases);
+            $nestingLevels   = count($relationAliases);
 
-					throw new \RuntimeException(sprintf('Unknown relation type `%s`', $relType));
-				}
+            do {
+                do {
+                    $alias = $relationAliases[$nestingLevel];
 
-				if (is_array($relation->getFields()) ||
-					is_array($relation->getReferencedFields())) {
+                    $name = join(
+                        '.',
+                        array_slice($relationAliases, 0, $nestingLevel + 1)
+                    );
+                } while (isset($eagerLoads[$name]) && ++$nestingLevel);
 
-					throw new \RuntimeException('Relations with composite keys are not supported');
-				}
+                if ($nestingLevel === 0) {
+                    $parentClassName = $this->subjectClassName;
+                } else {
+                    $parentName = join(
+                        '.',
+                        array_slice($relationAliases, 0, $nestingLevel)
+                    );
 
-				$parent      = $nestingLevel > 0 ? $eagerLoads[$parentName] : $this;
-				$constraints = $nestingLevel + 1 === $nestingLevels ? $queryConstraints : NULL;
-				
-				$eagerLoads[$name] = new EagerLoad($relation, $constraints, $parent);
-			}
-			while (++$nestingLevel < $nestingLevels);
-		}
+                    $parentClassName = $resolvedRelations[$parentName]->getReferencedModel();
 
-		return $eagerLoads;
-	}
+                    if ($parentClassName[0] === '\\') {
+                        ltrim($parentClassName, '\\');
+                    }
+                }
 
-	/**
-	 * @return $this
-	 */
-	public function execute() {
-		foreach ($this->buildTree() as $eagerLoad) {
-			$eagerLoad->load();
-		}
+                if (!isset($resolvedRelations[$name])) {
+                    $mM->load($parentClassName);
 
-		return $this;
-	}
+                    $relation = $mM->getRelationByAlias($parentClassName, $alias);
 
-	/**
-	 * Loader::execute() alias
-	 *
-	 * @return $this
-	 */
-	public function load() {
-		foreach ($this->buildTree() as $eagerLoad) {
-			$eagerLoad->load();
-		}
+                    if (!$relation instanceof Relation) {
+                        throw new \RuntimeException(
+                            sprintf(
+                                'There is no defined relation for the model `%s` using alias `%s`',
+                                $parentClassName,
+                                $alias
+                            )
+                        );
+                    }
 
-		return $this;
-	}
+                    $resolvedRelations[$name] = $relation;
+                } else {
+                    $relation = $resolvedRelations[$name];
+                }
+
+                $relType = $relation->getType();
+
+                if ($relType !== Relation::BELONGS_TO &&
+                    $relType !== Relation::HAS_ONE &&
+                    $relType !== Relation::HAS_MANY &&
+                    $relType !== Relation::HAS_MANY_THROUGH) {
+                    throw new \RuntimeException(
+                        sprintf(
+                            'Unknown relation type `%s`',
+                            $relType
+                        )
+                    );
+                }
+
+                if (is_array($relation->getFields()) || is_array($relation->getReferencedFields())) {
+                    throw new \RuntimeException(
+                        'Relations with composite keys are not supported'
+                    );
+                }
+
+                $parent      = $nestingLevel > 0 ? $eagerLoads[$parentName] : $this;
+                $constraints = $nestingLevel + 1 === $nestingLevels ? $queryConstraints : null;
+
+                $eagerLoads[$name] = new EagerLoad(
+                    $relation,
+                    $constraints,
+                    $parent
+                );
+            } while (++$nestingLevel < $nestingLevels);
+        }
+
+        return $eagerLoads;
+    }
+
+    /**
+     * @return $this
+     */
+    public function execute()
+    {
+        foreach ($this->buildTree() as $eagerLoad) {
+            $eagerLoad->load();
+        }
+
+        return $this;
+    }
+
+    /**
+     * Loader::execute() alias
+     *
+     * @return $this
+     */
+    public function load()
+    {
+        foreach ($this->buildTree() as $eagerLoad) {
+            $eagerLoad->load();
+        }
+
+        return $this;
+    }
 }

@@ -1,7 +1,7 @@
 <?php
 
-use Sb\Framework\Mvc\Model\EagerLoading\Loader;
-use Sb\Framework\Mvc\Model\EagerLoading\QueryBuilder;
+use Phalcon\Mvc\Model\EagerLoading\Loader;
+use Phalcon\Mvc\Model\EagerLoading\QueryBuilder;
 
 class EagerLoadingTests extends PHPUnit_Framework_TestCase {
 	public function testBelongsTo() {
